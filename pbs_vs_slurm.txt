@@ -1,0 +1,408 @@
+https://www.sdsc.edu/~hocks/FG/PBS.slurm.html
+Comparison between SLURM and Torque (PBS)
+
+
+torque queue = slurm partition
+
+
+Comparison of some common commands in SLURM and in Torque (PBS) and Maui. 
+
+
+Task  	 			Torque/PBS  			SLURM
+-------------------------------------------------------------------------
+Submit a job  			qsub myjob.sh  			sbatch myjob.sh
+Delete a job  			qdel 123  			scancel 123
+Show job status  		qstat  				squeue
+Show expected job start time  - (showstart in Maui/Moab)  	squeue --start
+Show queue info  		qstat -q  			sinfo
+Show queue details		qstat -Q -f              scontrol show partition 
+				  mdiag -c
+Show job details  		qstat -f 123  			scontrol show job 123
+Show queue details  		qstat -Q -f   		scontrol show partition 
+Show node details  		pbsnode n0000  			scontrol show node n0000
+Show QoS details  - 		(mdiag -q  in Maui/Moab)	sacctmgr show qos 
+
+
+Job control 
+
+
+Action                          Slurm                           Torque/PBS              Maui		SGE
+------------------------------------------------------------------------------------------------------------
+Get information about the job   scontrol show job "jobid"	qstat -f "jobid"        checkjob	
+Display the queue info		squeue                          qstat                   showq		qstat
+Delete a job                    scancel "jobid"                 qdel   					qdel
+Clean up leftover job						momctl -c JobID
+Submit a job                    srun/sbatch/salloc testjob      qsub testjob		msub		qsub
+Submit a interactive job	salloc -N 4 -p active sh	qsub -I					qlogin
+                                srun --nodelist=comp-1 bash     qsub -I -l nodes=comp-1:ppn=1
+
+Display all job info		squeue -al			qstat -f 
+				scontrol show job
+Display job  			scontrol show job "jobID"	qstat -f "jobID"
+Display free processors 	srun --test-only -p normal \
+				  -n 1 -t 10:00 sh					showbf 
+Display the expected start time squeue --start -j "jobid" 				showstart "jobid"
+Display blocked jobs		squeue --start						mdiag -b/showq -b
+Display queues/partitions	scontrol show partition		qstat -Qf 		mdiag -c
+Display queue			sinfo -h			qstat -q		
+				sinfo -o "%P %l %c %D "		
+                              
+Start job                       scontrol update JobId=1234 \    qrun  			runjob
+                                  StartTime=now Priority=300
+Hold job                        scontrol hold Job 1234          qhold 			sethold
+Release hold job		scontrol release Job 1234       qrls	                releasehold
+Pending job         		scontrol requeue 1234
+GUI 				sview				xpbs					qmon
+set priority			scontrol update JobId=592 \				setspri 10000 592
+				  nice=-10000
+
+preempt job			scontrol requeue $jobid					mjobctl -R $jobid
+suspend job			scontrol suspend $jobid					mjobctl -s $jobid
+resume job			scontrol resume	$jobid					mjobctl -r $jobid
+
+list job resources		sacct -j xxx --format=user,jobid,start,end,time,nodelist   tracejob xxx
+                                sacct -S 01.23 -o user%15,jobid,jobname,state,NCPUS,NNodes,node%32,start,ExitCode -j 20282
+                                sacct -T  -S2019-02-01 -E2019-02-04 -X -ojobid,jobname,user,start,end,state,node
+                                sacct -j 37134 -o user,jobid,jobname,state,NCPUS,NNodes,node,start,end,ExitCode 
+list job nodes			sacct -j xxx --format=nodelist%120  qstat -n
+                        
+list job submit time		sacct  -j xxx -o submit	tracejob xxx
+     
+
+alter job in queue						qalter  -l nodes=6:ppn=6 1600
+				scontrol update jobid=1600  NumNodes=6-6 NumCPUs=6 NumTasks=6
+								qalter -t %5 1600
+ 				scontrol update jobid=1713  ArrayTaskThrottle=5								
+
+bind job to reservation		sbatch --reservation=user.0				qsub -l walltime=1:00:00 -W x=FLAGS:ADVRES:user.0 
+
+show job charge										glsjob -j xxx
+
+
+Node control
+
+
+Action                          Slurm                               Torque/PBS              Maui
+------------------------------------------------------------------------------------------------
+
+Display node info		scontrol show node="node" 	     pbsnodes "node"	    checknode "node"
+Display job on node		ssh node "scontrol listpids"         pbsnodes node		
+				squeue -w "node"
+list feature and resource       sinfo -o "%15N %10c %10m  %25f %10G" pbsnodes 
+Drain node			scontrol update NodeName=gpu-1-4     pbsnodes -oN "Timeout" tcc-1-4
+				  State=DRAIN Reason=Timeout
+Clear node			scontrol update NodeName=gpu-1-4     pbsnodes -cN "" tcc-1-4
+				  State=RESUME
+List down Nodes			sinfo --list-reasons		     pbsnodes -ln
+				sinfo --long -R
+				sinfo -RlN
+
+list reservation		scontrol show res					    showres	
+                                sinfo -T
+				sinfo -R
+				sacctmgr show reservation
+
+set reservation			scontrol create res starttime=now duration=04:00:00 Nodecnt=1 Users=hocks Flags=IGNORE
+
+					setres -n tideker -s 00:00:01_06/11/2014 -d 24:00:00 -f tideker-node TASKS==256
+					setres -d 12:00:00 -g weka-group:builder-group -n weka -f wekaio 'tcc-4-[54-72]'
+
+
+delete reservation		scontrol delete reservationname="xxx" 			     releaseres xxx
+
+change reservation		scontrol update res reservationname=wayne Users=pfeiffer,mahidhar
+
+add job toreservation		scontrol update job 5557 ReservationName=idle2		    mjobctl -m reqreservation=idle2 JobID
+
+pbsnodes -l all:	
+	alias pn='sinfo --format="%25N %.3D %9P %11T %.4c %14C %.8z %.8m %.4d %.8w %10f %20E"'
+
+pbsnodes -ln
+	alias pl='sinfo --states=down,drain,fail,no_respond,maint,unk --format="%12n %20f %20H %12u %32E"'
+
+showstart: 
+	alias lj='sacct -o user,jobid,jobname,state,node,start'
+
+
+list allocated/idle/other/total:
+	sinfo --long -o %F
+
+
+
+Configuration control
+
+
+Action                          Slurm                           Torque/PBS              Maui
+------------------------------------------------------------------------------------------------
+
+show configuration		scontrol show config					showconfig 
+
+
+Job State
+
+
+       CA  CANCELLED       Job was explicitly cancelled by the user or system administrator.  The job may or
+                           may not have been initiated.
+
+       CD  COMPLETED       Job has terminated all processes on all nodes.
+
+       CF  CONFIGURING     Job has been allocated resources, but are waiting for them to  become  ready  for
+                           use (e.g. booting).
+
+       CG  COMPLETING      Job  is  in  the process of completing. Some processes on some nodes may still be
+                           active.
+
+       F   FAILED          Job terminated with non-zero exit code or other failure condition.
+
+       NF  NODE_FAIL       Job terminated due to failure of one or more allocated nodes.
+
+       PD  PENDING         Job is awaiting resource allocation.
+
+       PR  PREEMPTED       Job terminated due to preemption.
+
+       R   RUNNING         Job currently has an allocation.
+
+       S   SUSPENDED       Job has an allocation, but execution has been suspended.
+
+       TO  TIMEOUT         Job terminated upon reaching its time limit.
+
+
+format options
+
+The field specifications available include:
+
+              %a  State/availability of a partition
+
+              %A  Number of nodes by state in  the  format  "allocated/idle".
+                  Do  not use this with a node state option ("%t" or "%T") or
+                  the different node states will be placed on separate lines.
+
+              %c  Number of CPUs per node
+
+              %d  Size of temporary disk space per node in megabytes
+
+              %D  Number of nodes
+
+              %f  Features associated with the nodes
+
+              %F  Number   of   nodes   by   state   in   the  format  "allo-
+                  cated/idle/other/total".  Do not use this with a node state
+                  option  ("%t" or "%T") or the different node states will be
+                  placed on separate lines.
+
+              %g  Groups which may use the nodes
+
+              %h  Jobs may share nodes, "yes", "no", or "force"
+
+              %l  Maximum time for any job  in  the  format  "days-hours:min-
+                  utes:seconds"
+
+              %m  Size of memory per node in megabytes
+
+              %N  List of node names
+
+              %P  Partition name
+
+              %r  Only user root may initiate jobs, "yes" or "no"
+
+              %R  The  reason a node is unavailable (down, drained, or drain-
+                  ing states)
+
+              %s  Maximum job size in nodes
+
+              %t  State of nodes, compact form
+
+              %T  State of nodes, extended form
+
+              %w  Scheduling weight of the nodes
+
+              %.<*>
+                  right justification of the field
+
+              %<*>
+                  size of field
+
+Job variables
+
+
+Environment Variable  	Torque/PBS  		SLURM
+--------------------------------------------------------
+JOB ID  		PBS_JOBID  		SLURM_JOB_ID / SLURM_JOBID
+JOB NAME  		PBS_JOBNAME  		SLURM_JOB_NAME
+NODE LIST  		PBS_NODELIST  		SLURM_JOB_NODELIST / SLURM_NODELIST
+JOB SUBMIT DIRECTORY  	PBS_O_WORKDIR  		SLURM_SUBMIT_DIR
+JOB ARRAY ID (INDEX)  	PBS_ARRAY_INDEX  	SLURM_ARRAY_TASK_ID
+USER			PBS_USER		SLURM_JOB_USER
+
+prolog/epilogue
+
+    slurm:
+
+
+    BASIL_RESERVATION_ID    Basil reservation ID. Available on Cray XT/XE systems only. 
+    MPIRUN_PARTITION 	BlueGene partition name. Available on BlueGene systems only. 
+    SLURM_JOB_ACCOUNT	Account name used for the job. Available in PrologSlurmctld and EpilogSlurmctld only. 
+    SLURM_JOB_CONSTRAINTS2	Features required to run the job. Available in PrologSlurmctld and EpilogSlurmctld only. 
+    SLURM_JOB_DERIVED_EC	The highest exit code of all of the job steps. Available in EpilogSlurmctld only. 
+    SLURM_JOB_EXIT_CODE	The exit code of the job script (or salloc). Available in EpilogSlurmctld only. 
+    SLURM_JOB_GID		Group ID of the job's owner. Available in PrologSlurmctld and EpilogSlurmctld only. 
+    SLURM_JOB_GROUP		Group name of the job's owner. Available in PrologSlurmctld and EpilogSlurmctld only. 
+    SLURM_JOB_ID		Job ID. 
+    SLURM_JOB_NAME		Name of the job. Available in PrologSlurmctld and EpilogSlurmctld only. 
+    SLURM_JOB_NODELIST	Nodes assigned to job. A SLURM hostlist expression. "scontrol show hostnames" can be used to convert this to a list of individual host names. Available in PrologSlurmctld and EpilogSlurmctld only. 
+    SLURM_JOB_PARTITION	Partition that job runs in. Available in PrologSlurmctld and EpilogSlurmctld only. 
+    SLURM_JOB_UID		User ID of the job's owner. 
+    SLURM_JOB_USER		User name of the job's owner.
+
+    pbs:
+
+    "Prologue Args:"
+     "Job ID: $1"
+     "User ID: $2"
+     "Group ID: $3"
+
+
+    "Epilogue Args:"
+     "Job ID: $1"
+     "User ID: $2"
+     "Group ID: $3"
+     "Job Name: $4"
+     "Session ID: $5"
+     "Resource List: $6"
+     "Resources Used: $7"
+     "Queue Name: $8"
+     "Account String: $9"
+
+Environment variables per Job
+
+    PBS
+
+
+    PBS_VERSION=TORQUE-3.0.5
+    PBS_JOBNAME=STDIN
+    PBS_ENVIRONMENT=PBS_INTERACTIVE
+    PBS_O_WORKDIR=/home/hocks
+    PBS_TASKNUM=1
+    PBS_O_HOME=/home/hocks
+    PBS_WALLTIME=64800
+    PBS_GPUFILE=/var/spool/torque/aux//28288.tscc-mgr.localgpu
+    PBS_MOMPORT=15003
+    PBS_O_QUEUE=hotel
+    PBS_O_LOGNAME=hocks
+    PBS_O_LANG=en_US.iso885915
+    PBS_JOBCOOKIE=BCAC0808F8A2A5BA27581105BEF243F1
+    PBS_NODENUM=0
+    PBS_NUM_NODES=1
+    PBS_O_SHELL=/bin/bash
+    PBS_SERVER=tscc-mgr.local
+    PBS_JOBID=28288.tscc-mgr.local
+    PBS_O_HOST=tscc-mgr.sdsc.edu
+    PBS_VNODENUM=0
+    PBS_QUEUE=hotel
+    PBS_O_MAIL=/var/spool/mail/hocks
+    PBS_NP=1
+    PBS_NUM_PPN=1
+    PBS_NODEFILE=/var/spool/torque/aux//28288.tscc-mgr.local
+    PBS_O_PATH=/opt/openmpi/intel/ib/bin:/opt/intel/composer_xe_2013.1.117/bin/intel64:/opt/scar/bin:/opt/scar/sbin:/opt/
+    openmpi/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/eclipse:/opt/gang
+    lia/bin:/opt/ganglia/sbin:/opt/gold/bin:/opt/gold/sbin::/usr/java/latest/bin:/opt/maven/bin:/opt/maui/bin:/opt/torque
+    /bin:/opt/torque/sbin:/opt/pdsh/bin:/opt/rocks/bin:/opt/rocks/sbin:/home/hocks/bin
+
+    slurm
+
+
+    The variables in the following table are set inside the job.
+    SLURM_JOBID  A unique job identifier assigned by SLURM
+    The jobname set by -N.
+
+    SLURM_JOB_NODELIST  	String containing a coded version of the list of nodes assigned to the job
+    SLURM_JOB_NUM_NODES  	The number of compute nodes assigned to the parallel job.
+    SLURM_NTASKS_PER_NODE  	The number of tasks to start per node
+    SLURM_NTASKS  		The total number of tasks available for the job
+
+
+    env:
+
+    SLURM_NODELIST=gpu-1-4
+    SLURM_NODE_ALIASES=(null)
+    SLURM_NNODES=1
+    SLURM_JOBID=48
+    SLURM_TASKS_PER_NODE=1
+    SLURM_JOB_ID=48
+    SLURM_SUBMIT_DIR=/etc/slurm
+    SLURM_JOB_NODELIST=gpu-1-4
+    SLURM_JOB_CPUS_PER_NODE=1
+    SLURM_SUBMIT_HOST=mskcc-fe1.sdsc.edu
+    SLURM_JOB_NUM_NODES=1
+
+PBS job spool extention
+
+
+TA  array
+SC  job script
+JB  job spool file
+BD  bad
+
+
+slurm script for maui "showq" for cluster "comet"
+
+
+#!/bin/ksh
+
+if [ $# != 1 ] ; then
+   Flag="all"
+else
+   Flag=$1
+fi
+
+NORM="\033[0m"
+RED_F="\033[31m"; RED_B="\033[41m"
+BLINK="\033[5m"
+GREEN_F="\033[32m"
+
+if [[ $Flag == "-h" ]] ; then
+ echo "Flags : -r running , -b blocked, -h help , no flag shows all jobs"
+fi
+
+if [[ $Flag == "-r" || $Flag == "all" ]] ; then
+echo "ACTIVE JOBS--------------------"
+echo "             JOBID PARTITION NAME      USER     ST                        TIME  NODES CPU NODELIST"
+ /usr/bin/squeue -h -l | grep comet
+ WC1=$(/usr/bin/squeue -h| grep comet|wc -l)
+echo -e "${RED_F}\n active jobs $WC1 "
+ /usr/bin/squeue -h -l -p compute |grep comet | awk 'BEGIN{s=0};{s=s+8};END{print " " s " exclusive allocated Nodes" }'
+ /usr/bin/squeue -h -l -o "%.18i %.9P %.8j %.8u %.2t %.10M %.6D %.6C %R"| grep comet | awk 'BEGIN{s=0};{s=s+9};END{print " " s " allocated CPUs" }'echo -e "${NORM}"
+fi
+
+if [[ $Flag == "-b" || $Flag == "all" ]] ; then
+echo "BLOCKED JOBS----------------"
+echo "            JOBID  PARTITION NAME         USER ST          START_TIME  NODES  SCHEDNODES          REASON"
+ /usr/bin/squeue -h -l --start  | grep -v None
+ WC2=$(/usr/bin/squeue -h | grep -v comet|wc -l)
+echo -e "${RED_F} \n blocked jobs: $WC2 "
+ /usr/bin/squeue -h -l -p compute| grep -v comet | awk 'BEGIN{s=0};{s=s+8};END{print " " s " Partition COMPUTE requested Nodes " }'
+ /usr/bin/squeue -h -l -p shared -o "%.18i %.9P %.8j %.8u %.2t %.10M %.6D %.6C %R"| grep -v comet | awk 'BEGIN{s=0};{s=s+9};END{print " " s " Partition SHARED requested CPUs " }'
+echo -e "${NORM}"
+
+
+fi
+if [[ $Flag == "all" ]] ; then
+echo -e "${RED_F} Total jobs: $(expr $WC1 + $WC2) ${NORM}" 
+fi
+
+
+colour prompt
+
+
+
+red # export  PS1='\[\e[1;33m\][\u@\h \W]\$\[\e[0m\] '
+yellow # export  PS1='\[\e[1;32m\][\u@\h \W]\$\[\e[0m\] '
+green # export  PS1='\[\e[1;30m\][\u@\h \W]\$\[\e[0m\] '
+blue # export  PS1='\[\e[1;34m\][\u@\h \W]\$\[\e[0m\] '
+
+
+Others:
+
+
+sendmail : mailq       postfix: postqueue -p
+
