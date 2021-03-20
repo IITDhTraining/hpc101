@@ -33,8 +33,7 @@ int main(int argc, char * argv[]) {
     printf("time: %ld µs", duration); // print duration in microseconds
   }
 
-  //MPI termination sequence
-  MPI_Finalize();
+  //TODO: fill-in code here.
 
   return 0;
 }
